@@ -5,7 +5,6 @@ using UnityEngine.SceneManagement;
 
 public class AuthenticationInit : MonoBehaviour
 {
-    // is updating
     private async void Start()
     {
         await UnityServices.InitializeAsync();

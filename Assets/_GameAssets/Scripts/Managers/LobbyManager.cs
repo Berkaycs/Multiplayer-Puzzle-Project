@@ -106,6 +106,33 @@ public class LobbyManager : MonoBehaviour
         }
     }
 
+    public async Task<bool> JoinLobby(string joinCode)
+    {
+        Dictionary<string, string> playerData = new Dictionary<string, string>()
+        {
+            { "GamerTag", "JoinPlayer" }
+        };
+
+        JoinLobbyByCodeOptions options = new JoinLobbyByCodeOptions();
+        Player player = new Player(AuthenticationService.Instance.PlayerId, null, SerializePlayerData(playerData));
+
+        options.Player = player;
+
+        try
+        {
+            _currentLobby = await LobbyService.Instance.JoinLobbyByCodeAsync(joinCode, options);
+
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Error joining lobby: " + e.Message);
+            return false;
+        }
+
+        _refreshLobbyCoroutine = StartCoroutine(RefreshLobbyCoroutine(_currentLobby.Id, 1f));
+        return true;
+    }
+
     // Returns the join code of the current lobby
     public string GetJoinCode()
     {

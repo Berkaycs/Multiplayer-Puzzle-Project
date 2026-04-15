@@ -6,13 +6,21 @@ using UnityEngine.SceneManagement;
 
 public class MenuUI : MonoBehaviour
 {
+    [Header("References")]
+    [SerializeField] private GameObject _joinContainer;
     [SerializeField] private Button _hostButton;
     [SerializeField] private Button _joinButton;
 
-    private void Start()
+    private void OnEnable()
     {
         _hostButton.onClick.AddListener(OnHostButtonClicked);
         _joinButton.onClick.AddListener(OnJoinButtonClicked);
+    }
+
+    private void OnDisable()
+    {
+        _hostButton.onClick.RemoveListener(OnHostButtonClicked);
+        _joinButton.onClick.RemoveListener(OnJoinButtonClicked);
     }
 
     private async void OnHostButtonClicked()
@@ -35,6 +43,7 @@ public class MenuUI : MonoBehaviour
 
     private void OnJoinButtonClicked()
     {
-        
+        gameObject.SetActive(false);
+        _joinContainer.SetActive(true);
     }
 }
