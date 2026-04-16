@@ -7,6 +7,7 @@ using Unity.Services.Lobbies.Models;
 public class LobbyUI : MonoBehaviour
 {
     [SerializeField] private TextMeshProUGUI _joinCodeText;
+    [SerializeField] private Button _startButton;
     [SerializeField] private Button _readyButton;
     [SerializeField] private Image _mapImage;
     [SerializeField] private Button _leftButton;
@@ -20,10 +21,13 @@ public class LobbyUI : MonoBehaviour
     {
         if (LobbyManager.Instance.IsHost)
         {
-            _readyButton.onClick.AddListener(OnReadyButtonClicked);
             _leftButton.onClick.AddListener(OnLeftButtonClicked);
             _rightButton.onClick.AddListener(OnRightButtonClicked);
+            _startButton.onClick.AddListener(OnStartButtonClicked);
+            LobbyManager.Instance.OnLobbyReady += LobbyManager_OnLobbyReady;
         }
+
+        _readyButton.onClick.AddListener(OnReadyButtonClicked);
 
         LobbyManager.Instance.OnLobbyUpdated += OnLobbyUpdated;
     }
@@ -32,10 +36,13 @@ public class LobbyUI : MonoBehaviour
     {
         if (LobbyManager.Instance.IsHost)
         {
-            _readyButton.onClick.RemoveListener(OnReadyButtonClicked);
             _leftButton.onClick.RemoveListener(OnLeftButtonClicked);
             _rightButton.onClick.RemoveListener(OnRightButtonClicked);
+            _startButton.onClick.RemoveListener(OnStartButtonClicked);
+            LobbyManager.Instance.OnLobbyReady -= LobbyManager_OnLobbyReady;
         }
+
+        _readyButton.onClick.RemoveListener(OnReadyButtonClicked);
 
         LobbyManager.Instance.OnLobbyUpdated -= OnLobbyUpdated;
     }
@@ -49,6 +56,15 @@ public class LobbyUI : MonoBehaviour
             _leftButton.gameObject.SetActive(false);
             _rightButton.gameObject.SetActive(false);
         }
+        else
+        {
+            _= LobbyManager.Instance.SetSelectedMap(_currentMapIndex, _mapSelectionData.Maps[_currentMapIndex].SceneName);
+        }
+    }
+
+    private void LobbyManager_OnLobbyReady()
+    {
+        _startButton.gameObject.SetActive(true);
     }
 
     private void OnLobbyUpdated(Lobby lobby)
@@ -79,7 +95,7 @@ public class LobbyUI : MonoBehaviour
         }
 
         UpdateMap();
-        await LobbyManager.Instance.SetSelectedMap(_currentMapIndex);
+        await LobbyManager.Instance.SetSelectedMap(_currentMapIndex, _mapSelectionData.Maps[_currentMapIndex].SceneName);
     }
 
     private async void OnRightButtonClicked()
@@ -96,7 +112,12 @@ public class LobbyUI : MonoBehaviour
         }
 
         UpdateMap();
-        await LobbyManager.Instance.SetSelectedMap(_currentMapIndex);
+        await LobbyManager.Instance.SetSelectedMap(_currentMapIndex, _mapSelectionData.Maps[_currentMapIndex].SceneName);
+    }
+
+    private async void OnStartButtonClicked()
+    {
+        _= LobbyManager.Instance.StartGame();
     }
 
     private void UpdateMap()

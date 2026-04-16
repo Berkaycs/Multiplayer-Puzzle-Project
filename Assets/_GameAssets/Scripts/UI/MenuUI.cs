@@ -12,6 +12,8 @@ public class MenuUI : MonoBehaviour
     [SerializeField] private Button _hostButton;
     [SerializeField] private Button _joinButton;
 
+    private int _maxNumberOfPlayers = 4;
+
     private void OnEnable()
     {
         _hostButton.onClick.AddListener(OnHostButtonClicked);
@@ -34,7 +36,7 @@ public class MenuUI : MonoBehaviour
         lobbyData.Initialize(0); // Default map index, you can change this as needed
 
         // Create the lobby with the given max players, private status, and player data
-        bool success = await LobbyManager.Instance.CreateLobby(4, true, LobbyManager.Instance.LocalLobbyPlayerData.Serialize(), lobbyData.Serialize());
+        bool success = await LobbyManager.Instance.CreateLobby(_maxNumberOfPlayers, true, LobbyManager.Instance.LocalLobbyPlayerData.Serialize(), lobbyData.Serialize());
 
         // If the lobby creation succeeds, load the lobby scene
         if (success)

@@ -6,17 +6,29 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/_GameAssets/Scenes/InitializationScene.unity
+    path: Assets/_GameAssets/Scenes/InitScenes/InitializationScene.unity
     guid: 3a8be07942d54a74d92b4ca6874e9d3a
   - enabled: 1
-    path: Assets/_GameAssets/Scenes/LoadingScene.unity
+    path: Assets/_GameAssets/Scenes/InitScenes/LoadingScene.unity
     guid: 302ac7954c0a5e943bbf2855b4d409d2
   - enabled: 1
-    path: Assets/_GameAssets/Scenes/MainScene.unity
+    path: Assets/_GameAssets/Scenes/GameScenes/MainScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 1
-    path: Assets/_GameAssets/Scenes/LobbyScene.unity
+    path: Assets/_GameAssets/Scenes/GameScenes/LobbyScene.unity
     guid: 9e186540ee0d01d42837705b66c1e4e0
+  - enabled: 1
+    path: Assets/_GameAssets/Scenes/MapScenes/BlueScene.unity
+    guid: c9716130e6ee82d40b2de2e837b1cb6e
+  - enabled: 1
+    path: Assets/_GameAssets/Scenes/MapScenes/OrangeScene.unity
+    guid: d84e66bcd84a0894fa29cd43dcc6b03d
+  - enabled: 1
+    path: Assets/_GameAssets/Scenes/MapScenes/PinkScene.unity
+    guid: 7e2c75920ab5f8f4bbbbe52ea938412b
+  - enabled: 1
+    path: Assets/_GameAssets/Scenes/MapScenes/RedScene.unity
+    guid: 438a38bd0f485b74a91c1bc85ab2a85d
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0

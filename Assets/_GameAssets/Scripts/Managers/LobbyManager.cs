@@ -7,12 +7,14 @@ using Unity.Services.Lobbies.Models;
 using System.Collections;
 using System;
 using System.Threading;
+using UnityEngine.SceneManagement;
 
 public class LobbyManager : MonoBehaviour
 {
     public static LobbyManager Instance { get; private set; }
 
     public event Action<Lobby> OnLobbyUpdated;
+    public event Action OnLobbyReady;
 
     private Lobby _currentLobby;
 
@@ -26,6 +28,14 @@ public class LobbyManager : MonoBehaviour
     public LobbyPlayerData LocalLobbyPlayerData { get => _localLobbyPlayerData; set => _localLobbyPlayerData = value; }
 
     public bool IsHost => _localLobbyPlayerData.Id == _currentLobby.HostId;
+
+    private int _maxNumberOfPlayers = 4;
+
+    private bool _inGame = false;
+
+    /// <summary> Reduces Lobby API rate limits (429); only host + client each poll. </summary>
+    private const float LobbyRefreshInitialDelaySeconds = 2f;
+    private const float LobbyRefreshIntervalSeconds = 3f;
 
     private void Awake()
     {
@@ -66,6 +76,14 @@ public class LobbyManager : MonoBehaviour
     // Creates a lobby with the given max players, private status, and player data
     public async Task<bool> CreateLobby(int maxPlayers, bool isPrivate, Dictionary<string, string> data, Dictionary<string, string> lobbyData)
     {
+        if (_heartbeatCoroutine != null)
+        {
+            StopCoroutine(_heartbeatCoroutine);
+            _heartbeatCoroutine = null;
+        }
+
+        CancelAndDisposeUpdateLobbySource();
+
         // Serialize the player data into a dictionary of PlayerDataObject
         Dictionary<string, PlayerDataObject> playerData = SerializePlayerData(data);
 
@@ -151,16 +169,84 @@ public class LobbyManager : MonoBehaviour
     // Refreshes the lobby data from the lobby service
     private async void PeriodicallyRefreshLobby()
     {
-        _updateLobbySource = new CancellationTokenSource();
-        await Task.Delay(1000);
+        CancelAndDisposeUpdateLobbySource();
 
-        while (!_updateLobbySource.IsCancellationRequested && _currentLobby != null)
+        CancellationTokenSource cts = new CancellationTokenSource();
+        _updateLobbySource = cts;
+        CancellationToken token = cts.Token;
+
+        int rateLimitBackoffSeconds = 3;
+
+        try
         {
-            // we cant use await here because we are in a coroutine, so we use a task instead to await manually
-            _currentLobby = await LobbyService.Instance.GetLobbyAsync(_currentLobby.Id);
-            UpdateLobby(_currentLobby);
-            await Task.Delay(1000);
+            await Task.Delay(TimeSpan.FromSeconds(LobbyRefreshInitialDelaySeconds), token);
+
+            while (!token.IsCancellationRequested && _currentLobby != null)
+            {
+                try
+                {
+                    _currentLobby = await LobbyService.Instance.GetLobbyAsync(_currentLobby.Id);
+                    rateLimitBackoffSeconds = 3;
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception e)
+                {
+                    if (IsRateLimitedException(e))
+                    {
+                        Debug.LogWarning($"Lobby GetLobby rate limited; waiting {rateLimitBackoffSeconds}s before retry.");
+                        try
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(rateLimitBackoffSeconds), token);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+
+                        rateLimitBackoffSeconds = Math.Min(rateLimitBackoffSeconds * 2, 30);
+                        continue;
+                    }
+
+                    Debug.LogWarning("Lobby refresh failed: " + e.Message);
+                    break;
+                }
+
+                await UpdateLobby(_currentLobby);
+
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(LobbyRefreshIntervalSeconds), token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
         }
+        catch (OperationCanceledException)
+        {
+            // Expected when the refresh loop is replaced or torn down.
+        }
+    }
+
+    private static bool IsRateLimitedException(Exception e)
+    {
+        for (Exception current = e; current != null; current = current.InnerException)
+        {
+            string message = current.Message ?? string.Empty;
+            if (message.IndexOf("429", StringComparison.Ordinal) >= 0
+                || message.IndexOf("Too Many Requests", StringComparison.OrdinalIgnoreCase) >= 0
+                || (message.IndexOf("Rate", StringComparison.OrdinalIgnoreCase) >= 0
+                    && message.IndexOf("limit", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public async Task<bool> JoinLobby(string joinCode, Dictionary<string, string> playerData)
@@ -192,15 +278,38 @@ public class LobbyManager : MonoBehaviour
         return true;
     }
 
-    private void UpdateLobby(Lobby lobby)
+    public async Task StartGame()
+    {
+        string relayJoinCode = await RelayManager.Instance.CreateRelay(_maxNumberOfPlayers);
+        _inGame = true;
+
+        _lobbyData.RelayJoinCode = relayJoinCode;
+        await UpdateLobbyData(_lobbyData.Serialize());
+
+        string allocationId = RelayManager.Instance.GetAllocationId();
+        string conncetionData = RelayManager.Instance.GetConnectionData();
+
+        await UpdatePlayerData(_localLobbyPlayerData.Id, _localLobbyPlayerData.Serialize(), allocationId, conncetionData);
+
+        _ = SceneManager.LoadSceneAsync(_lobbyData.SceneName);
+    }
+
+    private async Task UpdateLobby(Lobby lobby)
     {
         List<Dictionary<string, PlayerDataObject>> playersData = GetPlayersData();
         _lobbyPlayerDatas.Clear();
+
+        int numberOfPlayerReady = 0;
 
         foreach (Dictionary<string, PlayerDataObject> playerData in playersData)
         {
             LobbyPlayerData lobbyPlayerData = new LobbyPlayerData();
             lobbyPlayerData.Initialize(playerData);
+
+            if (lobbyPlayerData.IsReady)
+            {
+                numberOfPlayerReady++;
+            }
 
             if (lobbyPlayerData.Id == AuthenticationService.Instance.PlayerId)
             {
@@ -214,15 +323,42 @@ public class LobbyManager : MonoBehaviour
         _lobbyData.Initialize(lobby.Data);
 
         OnLobbyUpdated?.Invoke(lobby);
+
+        if (numberOfPlayerReady == lobby.Players.Count)
+        {
+            // We can start the game
+            OnLobbyReady?.Invoke();
+        }
+
+        if (_lobbyData.RelayJoinCode != default && !_inGame)
+        {
+            await JoinRelayServer(_lobbyData.RelayJoinCode);
+            _= SceneManager.LoadSceneAsync(_lobbyData.SceneName);
+        }
     }
 
-    public async Task<bool> UpdatePlayerData(string id, Dictionary<string, string> data)
+    private async Task<bool> JoinRelayServer(string relayJoinCode)
+    {
+        _inGame = true;
+        await RelayManager.Instance.JoinRelay(relayJoinCode);
+
+        string allocationId = RelayManager.Instance.GetAllocationId();
+        string conncetionData = RelayManager.Instance.GetConnectionData();
+
+        await UpdatePlayerData(_localLobbyPlayerData.Id, _localLobbyPlayerData.Serialize(), allocationId, conncetionData);
+        return true;
+    }
+
+    // in params default means that if the parameter is not provided, it will be set to the default value of the type (null for reference types, 0 for value types, etc.)
+    public async Task<bool> UpdatePlayerData(string id, Dictionary<string, string> data, string allocationId = default, string connectionData = default)
     {
         Dictionary<string, PlayerDataObject> playerData = SerializePlayerData(data);
 
         UpdatePlayerOptions options = new UpdatePlayerOptions()
         {
-            Data = playerData
+            Data = playerData,
+            AllocationId = allocationId,
+            ConnectionInfo = connectionData
         };
 
         try
@@ -298,9 +434,10 @@ public class LobbyManager : MonoBehaviour
         return await UpdatePlayerData(_localLobbyPlayerData.Id, _localLobbyPlayerData.Serialize());
     }
 
-    public async Task<bool> SetSelectedMap(int mapIndex)
+    public async Task<bool> SetSelectedMap(int mapIndex, string sceneName)
     {
         _lobbyData.MapIndex = mapIndex;
+        _lobbyData.SceneName = sceneName;
         return await UpdateLobbyData(_lobbyData.Serialize());
     }
 
