@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
 using UnityEngine.SceneManagement;
+using Unity.Services.Authentication;
 
 public class MenuUI : MonoBehaviour
 {
@@ -26,13 +27,14 @@ public class MenuUI : MonoBehaviour
     private async void OnHostButtonClicked()
     {
         // Create a new dictionary of player data
-        Dictionary<string, string> playerData = new Dictionary<string, string>()
-        {
-            { "GamerTag", "HostPlayer" }
-        };
+        LobbyManager.Instance.LocalLobbyPlayerData = new LobbyPlayerData();
+        LobbyManager.Instance.LocalLobbyPlayerData  .Initialize(AuthenticationService.Instance.PlayerId, "HostPlayer");
+
+        LobbyData lobbyData = new LobbyData();
+        lobbyData.Initialize(0); // Default map index, you can change this as needed
 
         // Create the lobby with the given max players, private status, and player data
-        bool success = await LobbyManager.Instance.CreateLobby(4, true, playerData);
+        bool success = await LobbyManager.Instance.CreateLobby(4, true, LobbyManager.Instance.LocalLobbyPlayerData.Serialize(), lobbyData.Serialize());
 
         // If the lobby creation succeeds, load the lobby scene
         if (success)
