@@ -11,6 +11,8 @@ public class MenuUI : MonoBehaviour
     [SerializeField] private GameObject _joinContainer;
     [SerializeField] private Button _hostButton;
     [SerializeField] private Button _joinButton;
+    [SerializeField] private Button _rejoinButton;
+    [SerializeField] private Button _leaveButton;
 
     private int _maxNumberOfPlayers = 4;
 
@@ -27,6 +29,20 @@ public class MenuUI : MonoBehaviour
     {
         _hostButton.onClick.RemoveListener(OnHostButtonClicked);
         _joinButton.onClick.RemoveListener(OnJoinButtonClicked);
+    }
+
+    private async void Start()
+    {
+        if (await LobbyManager.Instance.HasActiveLobbies())
+        {
+            _hostButton.gameObject.SetActive(false);
+            _joinButton.gameObject.SetActive(false);
+
+            _rejoinButton.gameObject.SetActive(true);
+            _leaveButton.gameObject.SetActive(true);
+            _rejoinButton.onClick.AddListener(OnRejoinButtonClicked);
+            _leaveButton.onClick.AddListener(OnLeaveButtonClicked);
+        }
     }
 
     private async void OnHostButtonClicked()
@@ -52,5 +68,27 @@ public class MenuUI : MonoBehaviour
     {
         gameObject.SetActive(false);
         _joinContainer.SetActive(true);
+    }
+
+    private async void OnRejoinButtonClicked()
+    {
+        bool succeeded = await LobbyManager.Instance.RejoinLobby();
+
+        if (succeeded)
+        {
+            _= SceneManager.LoadSceneAsync(Consts.Scenes.LOBBY);
+        }
+    }
+
+    private async void OnLeaveButtonClicked()
+    {
+        bool succeeded = await LobbyManager.Instance.LeaveAllLobby();
+        if (succeeded)
+        {
+            _rejoinButton.gameObject.SetActive(false);
+            _leaveButton.gameObject.SetActive(false);
+            _hostButton.gameObject.SetActive(true);
+            _joinButton.gameObject.SetActive(true);
+        }
     }
 }

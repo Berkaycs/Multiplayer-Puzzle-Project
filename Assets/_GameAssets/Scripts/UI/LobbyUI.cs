@@ -70,7 +70,7 @@ public class LobbyUI : MonoBehaviour
         _startButton.gameObject.SetActive(true);
     }
 
-    private void OnLobbyUpdated(Lobby lobby)
+    private void OnLobbyUpdated()
     {
         _currentMapIndex = LobbyManager.Instance.GetMapIndex();
         UpdateMap();

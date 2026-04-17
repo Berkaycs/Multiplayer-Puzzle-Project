@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -14,6 +16,10 @@ public class NetworkMovementComponent : NetworkBehaviour
     [SerializeField] private Transform _camParent;
     [SerializeField] private GameObject _cinemachineCam;
     [SerializeField] private CharacterController _characterController;
+
+    [Header("Gizmos")]
+    [SerializeField] private MeshFilter _meshFilter;
+    [SerializeField] private Color _color;
 
     private Transform _cinemachineCamTransform;
 
@@ -38,9 +44,70 @@ public class NetworkMovementComponent : NetworkBehaviour
         _cinemachineCamTransform = _cinemachineCam.transform;
     }
 
-    private void OnServerTransformStateChanged(TransformState previousValue, TransformState newValue)
+    private void OnServerTransformStateChanged(TransformState previousState, TransformState serverState)
     {
-        previousTransformState = previousValue;
+        if (!IsOwner) return;
+
+        if (previousTransformState == null)
+        {
+            previousTransformState = serverState;
+        }
+
+        TransformState calculatedState = _transformStates.First(localState => localState.tick == serverState.tick);
+
+        if (calculatedState.position != serverState.position)
+        {
+            Debug.Log("Correcting client position");
+            // teleport the player to the server position
+            TeleportPlayer(serverState);
+
+            // Replay the inputs that the client has made
+            // since the server's authoritative state to get back to the predicted position.
+            IEnumerable<InputState> inputs = _inputStates.Where(input => input.tick > serverState.tick);
+            inputs = from input in inputs orderby input.tick select input;
+
+            foreach (InputState inputState in inputs)
+            {
+                MovePlayer(inputState.movementInput);
+                RotatePlayer(inputState.lookInput);
+
+                TransformState newTransformState = new TransformState
+                {
+                    tick = inputState.tick,
+                    position = transform.position,
+                    rotation = transform.rotation,
+                    hasStartedMoving = true
+                };
+
+                for (int i = 0; i < _transformStates.Length; i++)
+                {
+                    if (_transformStates[i].tick == inputState.tick)
+                    {
+                        _transformStates[i] = newTransformState; // update the buffered transform state to match the new predicted state after replaying inputs
+                        break;
+                    }
+                }
+
+                _transformStates[inputState.tick % BUFFER_SIZE] = newTransformState;
+            }
+        }
+    }
+
+    private void TeleportPlayer(TransformState state)
+    {
+        _characterController.enabled = false; // disable character controller to avoid collision issues when teleporting
+        transform.position = state.position;
+        transform.rotation = state.rotation;
+        _characterController.enabled = true; // re-enable character controller after teleporting
+
+        for (int i = 0; i < _transformStates.Length; i++)
+        {
+            if (_transformStates[i].tick == state.tick)
+            {
+                _transformStates[i] = state; // update the buffered transform state to match the server's authoritative state
+                break;
+            }
+        }
     }
 
     public void ProcessLocalPlayerMovement(Vector2 movementInput, Vector2 lookInput)
@@ -58,6 +125,7 @@ public class NetworkMovementComponent : NetworkBehaviour
                 // The server will eventually send back the authoritative state, which we will reconcile with our predicted state.
                 MovePlayer(movementInput);
                 RotatePlayer(lookInput);
+                SaveState(movementInput, lookInput, bufferIndex);
             }
             else
             {
@@ -72,27 +140,11 @@ public class NetworkMovementComponent : NetworkBehaviour
                     hasStartedMoving = true
                 };
 
+                SaveState(movementInput, lookInput, bufferIndex);
+
                 previousTransformState = serverTransformState.Value; // store the previous state for reconciliation
                 serverTransformState.Value = state; // update the server's authoritative state
             }
-
-            InputState inputState = new InputState
-            {
-                tick = _tick,
-                movementInput = movementInput,
-                lookInput = lookInput
-            };
-
-            TransformState transformState = new TransformState
-            {
-                tick = _tick,
-                position = transform.position,
-                rotation = transform.rotation,
-                hasStartedMoving = true
-            };
-
-            _inputStates[bufferIndex] = inputState; // buffer the input for potential reconciliation
-            _transformStates[bufferIndex] = transformState; // buffer the transform for potential reconciliation
 
             _tickDeltaTime -= _tickRate; // reset tick delta time, but keep any leftover time to maintain accurate timing
             _tick++;
@@ -105,7 +157,7 @@ public class NetworkMovementComponent : NetworkBehaviour
         if (_tickDeltaTime > _tickRate)
         {
             TransformState authoritative = serverTransformState.Value;
-            if (authoritative != null && authoritative.hasStartedMoving)
+            if (authoritative.hasStartedMoving)
             {
                 transform.position = authoritative.position;
                 transform.rotation = authoritative.rotation;
@@ -116,17 +168,51 @@ public class NetworkMovementComponent : NetworkBehaviour
         }
     }
 
+    private void SaveState(Vector2 movementInput, Vector2 lookInput, int bufferIndex)
+    {
+        InputState inputState = new InputState
+        {
+            tick = _tick,
+            movementInput = movementInput,
+            lookInput = lookInput
+        };
+        
+        TransformState transformState = new TransformState
+        {
+            tick = _tick,
+            position = transform.position,
+            rotation = transform.rotation,
+            hasStartedMoving = true
+        };
+
+        _inputStates[bufferIndex] = inputState;
+        _transformStates[bufferIndex] = transformState;
+    }
+
     private void MovePlayer(Vector2 movementInput)
     {
-        Vector3 movement = movementInput.x * _cinemachineCamTransform.right + movementInput.y * _cinemachineCamTransform.forward;
+        // Use player body axes (same rotation the server applies in RotatePlayer). Cinemachine is not reliable on the server for remote players.
+        Vector3 forward = transform.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 1e-6f)
+            forward = Vector3.forward;
+        else
+            forward.Normalize();
 
-        movement.y = 0; // prevent vertical movement
+        Vector3 right = transform.right;
+        right.y = 0f;
+        if (right.sqrMagnitude < 1e-6f)
+            right = Vector3.right;
+        else
+            right.Normalize();
+
+        Vector3 movement = movementInput.x * right + movementInput.y * forward;
 
         if (!_characterController.isGrounded) // simple gravity
         {
             movement.y = -9.81f;
         }
-        
+
         _characterController.Move(movement * _speed * _tickRate); // use fixed tick rate for consistent movement across clients and server
     }
 
@@ -179,5 +265,19 @@ public class NetworkMovementComponent : NetworkBehaviour
 
         previousTransformState = serverTransformState.Value; // store the previous state for reconciliation
         serverTransformState.Value = state;
+    }
+
+    private void OnDrawGizmos()
+    {
+        TransformState state = serverTransformState.Value;
+        if (!state.hasStartedMoving || _meshFilter == null)
+            return;
+
+        Mesh mesh = _meshFilter.sharedMesh;
+        if (mesh == null)
+            return;
+
+        Gizmos.color = _color;
+        Gizmos.DrawMesh(mesh, state.position);
     }
 }

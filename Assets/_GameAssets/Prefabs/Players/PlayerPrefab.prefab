@@ -51,7 +51,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1302397645561877977}
-  m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 0}
 --- !u!23 &88861728413399378
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -113,7 +113,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 3904597262
+  GlobalObjectIdHash: 157934387
   InScenePlacedSourceGlobalObjectIdHash: 157934387
   DeferredDespawnTick: 0
   Ownership: 1
@@ -143,6 +143,10 @@ MonoBehaviour:
   _camTransform: {fileID: 105973555103189286}
   _characterController: {fileID: 6662040125815304237}
   _networkMovementComponent: {fileID: -7675845078097804602}
+  _interactDistance: 10
+  _interactionLayer:
+    serializedVersion: 2
+    m_Bits: 8
 --- !u!114 &-7675845078097804602
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -162,6 +166,8 @@ MonoBehaviour:
   _camParent: {fileID: 2089629600460782119}
   _cinemachineCam: {fileID: 3377717491152234578}
   _characterController: {fileID: 6662040125815304237}
+  _meshFilter: {fileID: 3327723745626509468}
+  _color: {r: 1, g: 0.5820617, b: 0, a: 0.29411766}
   serverTransformState:
     UpdateTraits:
       MinSecondsBetweenUpdates: 0

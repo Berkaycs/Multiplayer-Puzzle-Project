@@ -20,7 +20,12 @@ public class LobbySpawner : MonoBehaviour
         LobbyManager.Instance.OnLobbyUpdated -= OnLobbyUpdated;
     }
 
-    private void OnLobbyUpdated(Lobby lobby)
+    private void Start()
+    {
+        OnLobbyUpdated();
+    }
+
+    private void OnLobbyUpdated()
     {
         List<LobbyPlayerData> lobbyPlayerDatas = LobbyManager.Instance.GetLobbyPlayerDatas();
 

@@ -12,6 +12,8 @@ public class PlayerController : NetworkBehaviour
     [SerializeField] private Transform _camTransform;
     [SerializeField] private CharacterController _characterController;
     [SerializeField] private NetworkMovementComponent _networkMovementComponent;
+    [SerializeField] private float _interactDistance;
+    [SerializeField] private LayerMask _interactionLayer;
     
     private PlayerControl _playerControl;
     private float _cameraAngle;
@@ -55,10 +57,33 @@ public class PlayerController : NetworkBehaviour
         if (IsOwner)
         {
             _networkMovementComponent.ProcessLocalPlayerMovement(movementInput, lookInput);
+
+            if (_playerControl.Player.Interact.inProgress)
+            {
+                if (Physics.Raycast(_camTransform.position, _camTransform.forward, out RaycastHit hit, _interactDistance, _interactionLayer))
+                {
+                    if (hit.collider.TryGetComponent<ButtonDoor>(out ButtonDoor buttonDoor))
+                    {
+                        UseButtonServerRpc();
+                    }
+                }
+            }
         }
         else 
         {
             _networkMovementComponent.ProcessSimulatedPlayerMovement();
+        }
+    }
+
+    [Rpc(SendTo.Server)]
+    private void UseButtonServerRpc()
+    {
+        if (Physics.Raycast(_camTransform.position, _camTransform.forward, out RaycastHit hit, _interactDistance, _interactionLayer))
+        {
+            if (hit.collider.TryGetComponent<ButtonDoor>(out ButtonDoor buttonDoor))
+            {
+                buttonDoor.Activate();
+            }
         }
     }
 

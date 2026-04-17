@@ -13,7 +13,7 @@ public class LobbyManager : MonoBehaviour
 {
     public static LobbyManager Instance { get; private set; }
 
-    public event Action<Lobby> OnLobbyUpdated;
+    public event Action OnLobbyUpdated;
     public event Action OnLobbyReady;
 
     private Lobby _currentLobby;
@@ -31,11 +31,16 @@ public class LobbyManager : MonoBehaviour
 
     private int _maxNumberOfPlayers = 4;
 
-    private bool _inGame = false;
+    private bool _inGame;
+    private bool _wasDisconnected;
+
+    private string _previousRelayCode;
 
     /// <summary> Reduces Lobby API rate limits (429); only host + client each poll. </summary>
     private const float LobbyRefreshInitialDelaySeconds = 2f;
     private const float LobbyRefreshIntervalSeconds = 3f;
+
+    private List<string> _joinedLobbiesId;
 
     private void Awake()
     {
@@ -71,6 +76,18 @@ public class LobbyManager : MonoBehaviour
 
         _updateLobbySource.Dispose();
         _updateLobbySource = null;
+    }
+
+    public async Task<bool> HasActiveLobbies()
+    {
+        await LobbyService.Instance.GetJoinedLobbiesAsync();
+
+        if (_joinedLobbiesId.Count > 0)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     // Creates a lobby with the given max players, private status, and player data
@@ -278,6 +295,44 @@ public class LobbyManager : MonoBehaviour
         return true;
     }
 
+    public async Task<bool> RejoinLobby()
+    {
+        try
+        {
+            _currentLobby = await LobbyService.Instance.ReconnectToLobbyAsync(_joinedLobbiesId[0]);
+            _= UpdateLobby(_currentLobby);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Error rejoining lobby: " + e.Message);
+            return false;
+        }
+
+        PeriodicallyRefreshLobby();
+        return true;
+    }
+
+    public async Task<bool> LeaveAllLobby()
+    {
+        string playerId = AuthenticationService.Instance.PlayerId;
+
+        foreach (string lobbyId in _joinedLobbiesId)
+        {
+            try
+            {
+                await LobbyService.Instance.RemovePlayerAsync(lobbyId, playerId);
+
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("Error leaving lobby: " + e.Message);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public async Task StartGame()
     {
         string relayJoinCode = await RelayManager.Instance.CreateRelay(_maxNumberOfPlayers);
@@ -288,6 +343,8 @@ public class LobbyManager : MonoBehaviour
 
         string allocationId = RelayManager.Instance.GetAllocationId();
         string conncetionData = RelayManager.Instance.GetConnectionData();
+
+        _localLobbyPlayerData.IsReady = false;
 
         await UpdatePlayerData(_localLobbyPlayerData.Id, _localLobbyPlayerData.Serialize(), allocationId, conncetionData);
 
@@ -322,7 +379,7 @@ public class LobbyManager : MonoBehaviour
         _lobbyData = new LobbyData();
         _lobbyData.Initialize(lobby.Data);
 
-        OnLobbyUpdated?.Invoke(lobby);
+        OnLobbyUpdated?.Invoke();
 
         if (numberOfPlayerReady == lobby.Players.Count)
         {
@@ -332,8 +389,19 @@ public class LobbyManager : MonoBehaviour
 
         if (_lobbyData.RelayJoinCode != default && !_inGame)
         {
-            await JoinRelayServer(_lobbyData.RelayJoinCode);
-            _= SceneManager.LoadSceneAsync(_lobbyData.SceneName);
+            if (_wasDisconnected)
+            {
+                if (_lobbyData.RelayJoinCode != _previousRelayCode)
+                {
+                    await JoinRelayServer(_lobbyData.RelayJoinCode);
+                    _ = SceneManager.LoadSceneAsync(_lobbyData.SceneName);
+                }
+            }
+            else
+            {
+                await JoinRelayServer(_lobbyData.RelayJoinCode);
+                _ = SceneManager.LoadSceneAsync(_lobbyData.SceneName);
+            }   
         }
     }
 
@@ -344,6 +412,8 @@ public class LobbyManager : MonoBehaviour
 
         string allocationId = RelayManager.Instance.GetAllocationId();
         string conncetionData = RelayManager.Instance.GetConnectionData();
+
+        _localLobbyPlayerData.IsReady = false;
 
         await UpdatePlayerData(_localLobbyPlayerData.Id, _localLobbyPlayerData.Serialize(), allocationId, conncetionData);
         return true;
@@ -372,7 +442,7 @@ public class LobbyManager : MonoBehaviour
             return false;
         }
 
-        OnLobbyUpdated?.Invoke(_currentLobby);
+        OnLobbyUpdated?.Invoke();
 
         return true;
     }
@@ -395,7 +465,7 @@ public class LobbyManager : MonoBehaviour
             return false;
         }
 
-        OnLobbyUpdated?.Invoke(_currentLobby);
+        OnLobbyUpdated?.Invoke();
 
         return true;
     }
@@ -439,6 +509,21 @@ public class LobbyManager : MonoBehaviour
         _lobbyData.MapIndex = mapIndex;
         _lobbyData.SceneName = sceneName;
         return await UpdateLobbyData(_lobbyData.Serialize());
+    }
+
+    public async void GoBackToLobby(bool wasDisconnected)
+    {
+        _inGame = false;
+        _wasDisconnected = wasDisconnected;
+
+        if (_wasDisconnected)
+        {
+            _previousRelayCode = _lobbyData.RelayJoinCode;
+        }
+
+        _localLobbyPlayerData.IsReady = false;
+        await UpdatePlayerData(_localLobbyPlayerData.Id, _localLobbyPlayerData.Serialize());
+        _= SceneManager.LoadSceneAsync(Consts.Scenes.LOBBY);
     }
 
     // Deletes the lobby when the application quits

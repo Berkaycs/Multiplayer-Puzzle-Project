@@ -11,7 +11,7 @@ public class TransformState : INetworkSerializable, IEquatable<TransformState>
 
     public void NetworkSerialize<T>(BufferSerializer<T> serializer) where T : IReaderWriter
     {
-        if (serializer.IsReader) // If we're reading data, we need to read the values in the same order they were written
+        if (serializer.IsReader) // If we are reading data, we need to read the values in the same order they were written
         {
             var reader = serializer.GetFastBufferReader();
             reader.ReadValueSafe(out tick);
@@ -19,7 +19,7 @@ public class TransformState : INetworkSerializable, IEquatable<TransformState>
             reader.ReadValueSafe(out rotation);
             reader.ReadValueSafe(out hasStartedMoving);
         }
-        else // If we're writing data, we need to write the values in a consistent order so they can be read correctly
+        else // If we are writing data, we need to write the values in a consistent order so they can be read correctly
         {
             var writer = serializer.GetFastBufferWriter();
             writer.WriteValueSafe(tick);
@@ -31,9 +31,6 @@ public class TransformState : INetworkSerializable, IEquatable<TransformState>
 
     public bool Equals(TransformState other)
     {
-        if (other is null)
-            return false;
-
         return tick == other.tick
             && position == other.position
             && rotation.Equals(other.rotation)
