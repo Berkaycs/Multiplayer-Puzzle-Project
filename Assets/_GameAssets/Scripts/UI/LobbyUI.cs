@@ -19,6 +19,9 @@ public class LobbyUI : MonoBehaviour
 
     private void OnEnable()
     {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
         if (LobbyManager.Instance.IsHost)
         {
             _leftButton.onClick.AddListener(OnLeftButtonClicked);

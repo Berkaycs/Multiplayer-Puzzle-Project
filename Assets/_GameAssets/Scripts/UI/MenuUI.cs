@@ -16,6 +16,9 @@ public class MenuUI : MonoBehaviour
 
     private void OnEnable()
     {
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+
         _hostButton.onClick.AddListener(OnHostButtonClicked);
         _joinButton.onClick.AddListener(OnJoinButtonClicked);
     }

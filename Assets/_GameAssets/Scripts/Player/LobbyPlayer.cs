@@ -9,7 +9,7 @@ public class LobbyPlayer : MonoBehaviour
     private LobbyPlayerData _data;
     private MaterialPropertyBlock _materialPropertyBlock;
 
-    private void Start()
+    private void Awake()
     {
         _materialPropertyBlock = new MaterialPropertyBlock();
     }
@@ -21,6 +21,7 @@ public class LobbyPlayer : MonoBehaviour
 
         if (_data.IsReady && _isReadyRenderer != null)
         {
+            _materialPropertyBlock ??= new MaterialPropertyBlock();
             _isReadyRenderer.GetPropertyBlock(_materialPropertyBlock);
             _materialPropertyBlock.SetColor("_BaseColor", Color.green);
             _isReadyRenderer.SetPropertyBlock(_materialPropertyBlock);
