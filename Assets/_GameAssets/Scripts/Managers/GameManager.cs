@@ -7,6 +7,21 @@ public class GameManager : MonoBehaviour
 {
     private void OnEnable()
     {
+        TrySubscribeNetworkCallbacks();
+    }
+
+    private void OnDisable()
+    {
+        TryUnsubscribeNetworkCallbacks();
+    }
+
+    private void TrySubscribeNetworkCallbacks()
+    {
+        if (NetworkManager.Singleton == null)
+            return;
+
+        NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
+        NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
         NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
 
@@ -14,14 +29,25 @@ public class GameManager : MonoBehaviour
         NetworkManager.Singleton.NetworkConfig.EnableNetworkLogs = true;
     }
 
-    private void OnDisable()
+    private void TryUnsubscribeNetworkCallbacks()
     {
+        if (NetworkManager.Singleton == null)
+            return;
+
         NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnected;
         NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
     }
 
     private void Start()
     {
+        TrySubscribeNetworkCallbacks();
+
+        if (NetworkManager.Singleton == null)
+        {
+            Debug.LogError("GameManager: NetworkManager.Singleton is null; cannot start host/client. Ensure a NetworkManager is active in this scene.");
+            return;
+        }
+
         NetworkManager.Singleton.NetworkConfig.ConnectionApproval = true;
 
         if (RelayManager.Instance.IsHost)
@@ -41,7 +67,7 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
-        if (NetworkManager.Singleton.ShutdownInProgress)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.ShutdownInProgress)
         {
             LobbyManager.Instance.GoBackToLobby(true);
         }
@@ -54,6 +80,9 @@ public class GameManager : MonoBehaviour
 
     private void OnClientDisconnected(ulong clientId)
     { 
+        if (NetworkManager.Singleton == null)
+            return;
+
         if (NetworkManager.Singleton.LocalClientId == clientId)
         {
             Debug.Log($"Client disconnected: {clientId}");

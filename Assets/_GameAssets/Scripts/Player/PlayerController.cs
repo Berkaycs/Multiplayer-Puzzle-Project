@@ -7,6 +7,8 @@ public class PlayerController : NetworkBehaviour
 {
     [Tooltip("Vertical look limits in degrees: x = min pitch, y = max pitch (e.g. -90 to 90).")]
     [SerializeField] private Vector2 _minMaxRotationX = new Vector2(-90f, 90f);
+    [SerializeField] private float _speed;
+    [SerializeField] private float _turnSpeed;
 
     [Header("References")]
     [SerializeField] private Transform _camTransform;
@@ -56,7 +58,16 @@ public class PlayerController : NetworkBehaviour
 
         if (IsOwner)
         {
-            _networkMovementComponent.ProcessLocalPlayerMovement(movementInput, lookInput);
+            //_networkMovementComponent.ProcessLocalPlayerMovement(movementInput, lookInput);
+
+            if (_playerControl.Player.Move.inProgress)
+            {
+                Vector3 movement = movementInput.x * _camTransform.right + movementInput.y * _camTransform.forward;
+
+                movement.y = 0f;
+
+                _characterController.Move(movement * _speed * Time.deltaTime);
+            }
 
             if (_playerControl.Player.Interact.inProgress)
             {
@@ -68,11 +79,15 @@ public class PlayerController : NetworkBehaviour
                     }
                 }
             }
+
+            RotatePlayer(lookInput);
         }
+        /*
         else 
         {
             _networkMovementComponent.ProcessSimulatedPlayerMovement();
         }
+        */
     }
 
     [Rpc(SendTo.Server)]
@@ -85,6 +100,11 @@ public class PlayerController : NetworkBehaviour
                 buttonDoor.Activate();
             }
         }
+    }
+
+    private void RotatePlayer(Vector2 lookInput)
+    {
+        transform.Rotate(Vector3.up, lookInput.x * _turnSpeed);
     }
 
     /*

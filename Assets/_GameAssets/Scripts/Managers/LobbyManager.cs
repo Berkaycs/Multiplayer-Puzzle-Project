@@ -40,7 +40,7 @@ public class LobbyManager : MonoBehaviour
     private const float LobbyRefreshInitialDelaySeconds = 2f;
     private const float LobbyRefreshIntervalSeconds = 3f;
 
-    private List<string> _joinedLobbiesId;
+    private List<string> _joinedLobbiesId = new List<string>();
 
     private void Awake()
     {
@@ -80,14 +80,18 @@ public class LobbyManager : MonoBehaviour
 
     public async Task<bool> HasActiveLobbies()
     {
-        await LobbyService.Instance.GetJoinedLobbiesAsync();
-
-        if (_joinedLobbiesId.Count > 0)
+        try
         {
-            return true;
+            _joinedLobbiesId = await LobbyService.Instance.GetJoinedLobbiesAsync();
+        }
+        catch (LobbyServiceException e)
+        {
+            Debug.LogWarning("GetJoinedLobbies failed: " + e.Message);
+            _joinedLobbiesId = new List<string>();
+            return false;
         }
 
-        return false;
+        return _joinedLobbiesId != null && _joinedLobbiesId.Count > 0;
     }
 
     // Creates a lobby with the given max players, private status, and player data
